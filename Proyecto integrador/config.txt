@@ -1,0 +1,1 @@
+directorio = C:/Users/Julian/Desktop/Programacion/cursoInove/Python_Inicial/Proyecto integrador/Backups/

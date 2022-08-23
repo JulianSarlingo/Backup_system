@@ -13,13 +13,15 @@ recuperar una de esas versiones, pero no hace milagros'''
 
 
 import csv
-from os import system 
+from logging import exception
+import os
 from os.path import exists
 from time import sleep
 import datetime
 import shutil
+from unicodedata import numeric
 
-system('cls')
+os.system('cls')
 
 # Funcion para establecer la fecha y hora del backup
 def hora():
@@ -35,7 +37,6 @@ def ultimo_backup():
     for backup in data:
         if backup.get('Ultimo') == '1':
             return data.index(backup)
-
 
 # Funcion que genera el indice del backup
 def generar_id():
@@ -213,20 +214,19 @@ def ingreso_datos():
 
     return True
 
-
 # Funcion que realiza los backups
 def comenzar_backup(indice):
     # Abrir el archivo CSV en modo lectura
+    os.system('cls')
     with open('directorios.csv', 'r') as csvfile:
         data = list(csv.DictReader(csvfile))
     
-    nombre = data[indice]['Directorio'].split('/')[-1]
+    nombre = data[indice]['Directorio'].split('/')[-1].split('.')[0]
     ruta_origen = data[indice]['Directorio']
 
     with open('config.txt') as config:
         texto = config.read().split(' = ')[-1].rstrip()
-    # Pegar aqui debajo la ruta donde hará las copias de seguridad
-    # La carpeta "Backups" 
+        
     ruta_destino = texto + data[indice]['Nombre'] + '/Backup'
 
 
@@ -244,9 +244,18 @@ def comenzar_backup(indice):
 
     # minutos = 0
     # horas = 0
-    print('Introduzca la cantidad de minutos que va a estar trabajando en esta carpeta')
-    print('Numeros decimales son validos')
-    tiempo = float(input())
+
+    while True:
+        try:
+            print('Introduzca la cantidad de minutos que va a estar trabajando en esta carpeta')
+            print('Numeros decimales son validos')
+            tiempo = float(input())
+            if tiempo == 0 or tiempo < 0:
+                print('El numero debe ser mayor a 0 y positivo')
+                raise ValueError
+            break
+        except:
+            print('Por favor, ingrese un valor numerico valido\n')
     # tiempo = float(input('Si el numero es mayor a 10, se supondrá que se refiere a minutos: '))
 
     # if tiempo > 10:
@@ -256,9 +265,18 @@ def comenzar_backup(indice):
 
     segundos = tiempo * 60
 
-    intervalo = float(input('Introduzca cada cuanto tiempo (en minutos) se realizará el backup:\n'))
-    intervalo *= 60
 
+    while True:
+        try:
+            intervalo = float(input('Introduzca cada cuanto tiempo (en minutos) se realizará el backup:\n'))
+            if intervalo == 0 or intervalo < 0:
+                print('El numero debe ser mayor a 0 y positivo')
+                raise ValueError
+            break
+        except:
+            print('Por favor, ingrese un valor numerico valido\n')
+
+    intervalo *= 60
     while segundos > 0:
         for i in range(1,4):
             sleep(intervalo)
@@ -278,10 +296,15 @@ def comenzar_backup(indice):
                 print(noExiste)
                 
             # Aqui la operacion para copiar la carpeta
-            shutil.copytree(ruta_origen, ruta_destino +
-                            str(i) + '/' + nombre)
 
-            # Resetear la fecha ultimo backup Backup
+            try:
+                os.makedirs(ruta_destino + str(i) + '/' + nombre)
+                shutil.copy2(ruta_origen, ruta_destino + str(i) + '/' + nombre)
+            except:
+                shutil.rmtree(ruta_destino + str(i))
+                shutil.copytree(ruta_origen, ruta_destino + str(i) + '/' + nombre)
+
+            # Resetear la fecha ultimo Backup y establecer como ultimo
             csvfile = open('directorios.csv')
             data = list(csv.DictReader(csvfile))
 
@@ -320,14 +343,11 @@ def comenzar_backup(indice):
             print('Por favor, indique el numero del backup que necesita')
             numero = int(input('Indique un numero del 1 al 3\n'))
             recuperar_carpeta(nombre, numero, ruta_destino, ruta_origen)
-        
-    
-    
 
 # Funcion que permite seleccionar la carpeta a respaldar
 def seleccion_carpeta():
     # Resetear el 'Ultimo' Backup
-    system('cls')
+    os.system('cls')
     csvfile = open('directorios.csv')
     data = list(csv.DictReader(csvfile))
 
@@ -345,22 +365,40 @@ def seleccion_carpeta():
     writer.writerows(data)
     csvfile.close()
 
-    print('Tiene a disposicion estas carpetas:')
-    for i in range(len(data)):
-        print(str(i+1) + '.' + data[i]['Nombre'])
-    indice = int(input('De cual desea hacer Backups?'))
+
+    while True:
+        try:
+            print('Tiene a disposicion estas carpetas:')
+            for i in range(len(data)):
+                print(str(i+1) + '. ' + data[i]['Nombre'])
+            indice = int(input('Indique el numero de la cual desea hacer Backups:\n'))
+            if indice > len(data) or indice < 1:
+                raise ValueError
+            break
+        except:
+            os.system('cls')
+            print('Por favor, ingrese un numero valido\n')
+    
     comenzar_backup(indice - 1)
 
 # Funcion que recupera el archivo desde el backup si surgio algun problema
 # Se invierten las rutas de origen y destino ya que ahora
 # se copiara la carpeta con direcciones contrarias
-def recuperar_carpeta(nombre, backup, ruta_origen, ruta_destino):
+def recuperar_carpeta(nombre, backup, ruta_entrada, ruta_salida):
     print('Deshaciendo cambios')
 
-    shutil.rmtree(ruta_destino)
-    ruta_destino = ruta_destino.removesuffix('Backups/')
-    shutil.copytree(ruta_origen + str(backup) + '/' + nombre,
-                    ruta_destino)
+    try:
+        shutil.rmtree(ruta_salida)
+        ruta_salida = ruta_salida.removesuffix('Backups/')
+        shutil.copytree(ruta_entrada + str(backup) + '/' + nombre,
+                        ruta_salida)
+
+    except:
+        os.remove(ruta_salida)
+        archivo = ruta_salida.split('/')[-1]
+        ruta_salida = ruta_salida.removesuffix(archivo)
+        shutil.copy2(ruta_entrada + str(backup) + '/' + nombre + '/' + archivo,
+                     ruta_salida)
 
 
 # Main
